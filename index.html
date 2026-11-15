@@ -81,6 +81,30 @@
   .keys{display:flex;gap:26px;flex-wrap:wrap;justify-content:center;
         margin-top:14px;font-size:12px;letter-spacing:2px;color:#4f7893}
   .keys b{color:#8ad7ee;font-weight:700}
+
+  /* ================= 设置面板 ================= */
+  #settingsPanel{
+    display:none;width:360px;padding:22px 26px;
+    border:1px solid rgba(60,180,220,.35);border-radius:4px;
+    background:rgba(8,20,35,.78);
+    box-shadow:0 0 26px rgba(24,224,255,.15),0 0 60px rgba(24,224,255,.06) inset;
+  }
+  #settingsPanel.show{display:block}
+  .setting-row{display:flex;align-items:center;gap:14px}
+  .setting-row label{font-size:13px;letter-spacing:2px;color:#8ad7ee;white-space:nowrap}
+  input[type=range]{
+    flex:1;-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;
+    background:linear-gradient(90deg,#18e0ff,#7ef6ff);outline:none;cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+    background:#eafcff;box-shadow:0 0 12px #18e0ff;cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:16px;height:16px;border:none;border-radius:50%;
+    background:#eafcff;box-shadow:0 0 12px #18e0ff;cursor:pointer;
+  }
+  #sensValue{font-size:13px;color:#7ef6ff;min-width:56px;text-align:right;font-weight:700}
 </style>
 </head>
 <body>
@@ -116,6 +140,15 @@
 <div id="overlay" class="show">
   <div id="overlayTitle">NEON STRIKE</div>
   <div id="overlaySub">在霓虹竞技场中生存下去，击退一波又一波的敌人。爆头伤害更高！<br>第 5 波起会出现游走型的紫色敌人，小心应对。</div>
+
+  <div id="settingsPanel">
+    <div class="setting-row">
+      <label for="sensRange">鼠标灵敏度</label>
+      <input type="range" id="sensRange" min="0.2" max="3" step="0.05" value="1" />
+      <span id="sensValue">1.00×</span>
+    </div>
+  </div>
+
   <button id="startBtn">开始游戏</button>
   <div class="keys">
     <span><b>W A S D</b> 移动</span>
@@ -286,6 +319,12 @@ let time = 0;
 let viewRecoil = 0;
 let damageAlpha = 0;
 let bannerTimer = 0;
+
+/* =========================================================
+   鼠标灵敏度（可在暂停设置中调节）
+   ========================================================= */
+const BASE_SENS = 0.0022;       // 灵敏度 1.0× 对应的基础系数
+let sensitivityMul = 1.0;       // 用户可调倍率
 
 /* =========================================================
    武器模型（挂在相机上）
@@ -471,6 +510,9 @@ const LEG_MULT  = 0.6;   // 双腿 60%
 /* 敌人固定血量 */
 const ENEMY_MAX_HP = 100;
 
+/* 敌人碰撞半径（略大于最宽部位，避免视觉穿墙） */
+const ENEMY_RADIUS = 0.5;
+
 /* 新敌人：游走者 */
 const WEAVER_START_WAVE = 5;     // 从第 5 波开始出现
 const WEAVER_CHANCE = 0.15;      // 15% 生成概率
@@ -544,6 +586,9 @@ function spawnEnemy() {
     // 游走参数
     weaveFreq: 2.0 + Math.random() * 0.9,
     weaveAmp: 3.6 + Math.random() * 1.0,
+    // 绕障状态：持续朝一个方向绕行一段时间，避免左右抖动
+    avoidSign: 1,
+    avoidTimer: 0,
   };
 
   /* ---------- 游走者外观：头顶发光尖角 ---------- */
@@ -591,6 +636,126 @@ function killEnemy(enemy) {
   score += 100;
 }
 
+/* =========================================================
+   敌人寻路 / 避障辅助
+   ========================================================= */
+
+/* 收集敌人附近的障碍物（按外接圆距离预筛选，提高效率） */
+const _nearbyCache = [];
+function getNearbyObstacles(x, z, radius) {
+  _nearbyCache.length = 0;
+  for (const o of obstacles) {
+    const obR = Math.hypot(o.userData.w / 2, o.userData.d / 2);
+    const maxDist = obR + radius;
+    const dx = x - o.position.x;
+    const dz = z - o.position.z;
+    if (dx * dx + dz * dz < maxDist * maxDist) _nearbyCache.push(o);
+  }
+  return _nearbyCache;
+}
+
+/* 判断某个点是否落在障碍物（外扩 checkRadius）内 */
+function pointBlocked(x, z, checkRadius, list) {
+  for (let k = 0; k < list.length; k++) {
+    const o = list[k];
+    const hx = o.userData.w / 2 + checkRadius;
+    const hz = o.userData.d / 2 + checkRadius;
+    if (Math.abs(x - o.position.x) < hx && Math.abs(z - o.position.z) < hz) return true;
+  }
+  return false;
+}
+
+/* 前瞻式避障转向：
+   沿期望方向做多点采样，被挡住时尝试左右偏转，选出最早通畅的方向 */
+function getAvoidanceDir(px, pz, dirX, dirZ, radius, list, enemy) {
+  if (list.length === 0) return { x: dirX, z: dirZ };
+
+  const lookAhead = 2.4;
+  const checkRadius = radius + 0.28;
+  const steps = 4;
+
+  function clearAlong(dx, dz) {
+    for (let i = 1; i <= steps; i++) {
+      const t = (i / steps) * lookAhead;
+      if (pointBlocked(px + dx * t, pz + dz * t, checkRadius, list)) return false;
+    }
+    return true;
+  }
+
+  // 直行通畅
+  if (clearAlong(dirX, dirZ)) return { x: dirX, z: dirZ };
+
+  // 保持上一次的绕行方向偏好，减少左右抖动
+  const perpX = -dirZ;
+  const perpZ = dirX;
+  const preferred = enemy.avoidSign || 1;
+
+  const angles = [0.45, 0.9, 1.35, Math.PI / 2];
+  const signs = preferred > 0 ? [1, -1] : [-1, 1];
+
+  for (const ang of angles) {
+    for (const sgn of signs) {
+      const cos = Math.cos(ang);
+      const sin = Math.sin(ang) * sgn;
+      const nx = dirX * cos + perpX * sin;
+      const nz = dirZ * cos + perpZ * sin;
+      if (clearAlong(nx, nz)) {
+        enemy.avoidSign = sgn;
+        enemy.avoidTimer = 0.6;   // 保持该绕行方向一段时间
+        return { x: nx, z: nz };
+      }
+    }
+  }
+
+  // 全被堵住：先尝试从当前障碍物侧面绕出
+  // 找到最近的障碍物，取其最近边的切线方向
+  let bestO = null, bestD = Infinity;
+  for (let k = 0; k < list.length; k++) {
+    const o = list[k];
+    const hx = o.userData.w / 2;
+    const hz = o.userData.d / 2;
+    const cx = Math.max(o.position.x - hx, Math.min(o.position.x + hx, px));
+    const cz = Math.max(o.position.z - hz, Math.min(o.position.z + hz, pz));
+    const d = Math.hypot(px - cx, pz - cz);
+    if (d < bestD) { bestD = d; bestO = o; }
+  }
+  if (bestO) {
+    // 从障碍物中心指向敌人的方向，作为逃离方向
+    let ex = px - bestO.position.x;
+    let ez = pz - bestO.position.z;
+    const el = Math.hypot(ex, ez) || 1;
+    ex /= el; ez /= el;
+    // 混合一点垂直方向，帮助滑离
+    const tx = -ez * preferred;
+    const tz = ex * preferred;
+    let fx = ex * 0.6 + tx * 0.8;
+    let fz = ez * 0.6 + tz * 0.8;
+    const fl = Math.hypot(fx, fz) || 1;
+    return { x: fx / fl, z: fz / fl };
+  }
+
+  return { x: dirX, z: dirZ };
+}
+
+/* 硬碰撞解决：若敌人落入障碍物内部，沿最近轴推出（保证绝不穿模） */
+function resolveEnemyCollision(pos, radius) {
+  for (const o of obstacles) {
+    const hx = o.userData.w / 2 + radius;
+    const hz = o.userData.d / 2 + radius;
+    const dx = pos.x - o.position.x;
+    const dz = pos.z - o.position.z;
+    if (Math.abs(dx) < hx && Math.abs(dz) < hz) {
+      const px = hx - Math.abs(dx);
+      const pz = hz - Math.abs(dz);
+      if (px < pz) {
+        pos.x = o.position.x + Math.sign(dx || 1) * hx;
+      } else {
+        pos.z = o.position.z + Math.sign(dz || 1) * hz;
+      }
+    }
+  }
+}
+
 function updateEnemies(dt) {
   const pp = player.pos;
   for (let i = enemies.length - 1; i >= 0; i--) {
@@ -604,19 +769,32 @@ function updateEnemies(dt) {
 
     e.root.rotation.y = Math.atan2(nx, nz);
 
+    // 附近障碍物（寻路用）
+    const nearby = getNearbyObstacles(p.x, p.z, 6.0);
+
+    // 绕行方向保持计时
+    if (e.avoidTimer > 0) e.avoidTimer -= dt;
+
     if (dist > e.attackRange) {
-      const step = e.speed * dt;
+      /* ---------- 期望方向：朝玩家 ---------- */
+      let desiredX = nx, desiredZ = nz;
+
+      /* 游走者：叠加左右摆动 */
       if (e.type === 'weaver') {
-        /* 游走者：追逐的同时做左右摆动 */
         const sway = Math.sin(time * e.weaveFreq + e.phase) * e.weaveAmp;
-        // 水平面内垂直于朝向的向量
         const perpX = -nz, perpZ = nx;
-        p.x += nx * step + perpX * sway * dt;
-        p.z += nz * step + perpZ * sway * dt;
-      } else {
-        p.x += nx * step;
-        p.z += nz * step;
+        desiredX += perpX * sway * 0.15;
+        desiredZ += perpZ * sway * 0.15;
+        const dl = Math.hypot(desiredX, desiredZ);
+        if (dl > 0.0001) { desiredX /= dl; desiredZ /= dl; }
       }
+
+      /* ---------- 前瞻避障 ---------- */
+      const avoid = getAvoidanceDir(p.x, p.z, desiredX, desiredZ, ENEMY_RADIUS, nearby, e);
+
+      const step = e.speed * dt;
+      p.x += avoid.x * step;
+      p.z += avoid.z * step;
     } else {
       e.attackCd -= dt;
       if (e.attackCd <= 0) {
@@ -626,7 +804,7 @@ function updateEnemies(dt) {
       }
     }
 
-    // 敌人之间简单分离
+    /* ---------- 敌人之间简单分离 ---------- */
     for (let j = 0; j < enemies.length; j++) {
       if (j === i) continue;
       const o = enemies[j].root.position;
@@ -638,6 +816,16 @@ function updateEnemies(dt) {
         p.x += (ddx / d) * push;
         p.z += (ddz / d) * push;
       }
+    }
+
+    /* ---------- 硬碰撞解决：绝不留在障碍物内部 ---------- */
+    resolveEnemyCollision(p, ENEMY_RADIUS);
+
+    /* ---------- 边界约束 ---------- */
+    const rr = Math.hypot(p.x, p.z);
+    if (rr > ARENA_RADIUS - 1) {
+      p.x *= (ARENA_RADIUS - 1) / rr;
+      p.z *= (ARENA_RADIUS - 1) / rr;
     }
 
     // 悬浮（轻微上下浮动）
@@ -675,7 +863,7 @@ function gameOver() {
   mouseDown = false;
   if (document.pointerLockElement) document.exitPointerLock();
   hud.classList.remove('show');
-  showOverlay('游戏结束', `你坚持到了第 ${wave} 波 · 最终得分 ${score}`, '重新开始');
+  showOverlay('游戏结束', `你坚持到了第 ${wave} 波 · 最终得分 ${score}`, '重新开始', false);
 }
 
 /* =========================================================
@@ -990,6 +1178,7 @@ const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlayTitle');
 const overlaySub = document.getElementById('overlaySub');
 const startBtn = document.getElementById('startBtn');
+const settingsPanel = document.getElementById('settingsPanel');
 
 function updateHUD(dt) {
   const pct = Math.max(0, player.hp) / player.maxHp * 100;
@@ -1022,16 +1211,35 @@ function showBanner(text) {
   bannerTimer = 1.9;
 }
 
-function showOverlay(title, sub, btn) {
+function showOverlay(title, sub, btn, showSettings) {
   overlayTitle.textContent = title;
   overlaySub.textContent = sub;
   startBtn.textContent = btn;
+  settingsPanel.classList.toggle('show', !!showSettings);
   overlay.classList.add('show');
 }
 
 function hideOverlay() {
   overlay.classList.remove('show');
 }
+
+/* =========================================================
+   鼠标灵敏度设置
+   ========================================================= */
+const sensRange = document.getElementById('sensRange');
+const sensValue = document.getElementById('sensValue');
+
+function applySensitivity(val) {
+  sensitivityMul = Math.max(0.2, Math.min(3, val));
+  sensValue.textContent = sensitivityMul.toFixed(2) + '×';
+  sensRange.value = sensitivityMul;
+}
+
+sensRange.addEventListener('input', () => {
+  applySensitivity(parseFloat(sensRange.value));
+});
+// 初始化显示
+applySensitivity(parseFloat(sensRange.value));
 
 /* =========================================================
    输入
@@ -1076,7 +1284,8 @@ document.addEventListener('contextmenu', (e) => e.preventDefault());
 
 document.addEventListener('mousemove', (e) => {
   if (document.pointerLockElement !== canvas) return;
-  const sens = 0.0022 * (aiming ? ADS_SENS : 1);
+  // 灵敏度 = 基础系数 × 用户倍率 × 开镜倍率
+  const sens = BASE_SENS * sensitivityMul * (aiming ? ADS_SENS : 1);
   player.yaw -= e.movementX * sens;
   player.pitch -= e.movementY * sens;
   const lim = Math.PI / 2 - 0.06;
@@ -1102,7 +1311,7 @@ document.addEventListener('pointerlockchange', () => {
       state = 'paused';
       mouseDown = false;
       hud.classList.remove('show');
-      showOverlay('已暂停', '点击继续，回到战场', '继续游戏');
+      showOverlay('已暂停', '可在此调节鼠标灵敏度，点击继续返回战场', '继续游戏', true);
     }
   }
 });

@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
 <title>极品帮射击游戏</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
@@ -10,6 +10,8 @@
     width:100%;height:100%;overflow:hidden;background:#04060a;color:#cfe9ff;
     font-family:"Segoe UI",-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
     user-select:none;-webkit-user-select:none;cursor:default;
+    -webkit-tap-highlight-color:transparent;
+    overscroll-behavior:none;touch-action:none;
   }
   #game{position:fixed;inset:0}
   canvas{display:block}
@@ -52,7 +54,8 @@
   /* 波次提示 */
   .banner{position:absolute;top:22%;left:50%;transform:translateX(-50%);
           font-size:46px;font-weight:900;letter-spacing:10px;color:#7ef6ff;
-          text-shadow:0 0 30px #18e0ff,0 0 60px rgba(24,224,255,.5);opacity:0}
+          text-shadow:0 0 30px #18e0ff,0 0 60px rgba(24,224,255,.5);opacity:0;
+          white-space:nowrap}
 
   /* ================= 连击特效 ================= */
   .combo{
@@ -65,6 +68,7 @@
     font-size:46px;font-weight:900;letter-spacing:8px;
     color:#ffe066;
     text-shadow:0 0 20px rgba(255,200,60,.9),0 0 52px rgba(255,150,30,.55);
+    white-space:nowrap;
   }
   .combo-text.pop{animation:comboPop .42s cubic-bezier(.2,1.6,.4,1)}
   @keyframes comboPop{
@@ -94,6 +98,7 @@
   #overlay{
     position:fixed;inset:0;display:flex;flex-direction:column;
     align-items:center;justify-content:center;gap:20px;text-align:center;
+    padding:20px;
     background:radial-gradient(circle at 50% 45%,rgba(10,30,55,.82),rgba(3,5,10,.96));
     opacity:0;pointer-events:none;transition:opacity .3s;z-index:10;
     backdrop-filter:blur(3px);
@@ -117,16 +122,20 @@
         margin-top:14px;font-size:12px;letter-spacing:2px;color:#4f7893}
   .keys b{color:#8ad7ee;font-weight:700}
 
+  .touch-hint{display:none;font-size:12px;letter-spacing:2px;color:#7fd8ee;
+              max-width:340px;line-height:2;margin-top:4px}
+
   /* ================= 设置面板 ================= */
   #settingsPanel{
-    display:none;width:360px;padding:22px 26px;
+    display:none;width:380px;max-width:92vw;padding:22px 26px;
     border:1px solid rgba(60,180,220,.35);border-radius:4px;
     background:rgba(8,20,35,.78);
     box-shadow:0 0 26px rgba(24,224,255,.15),0 0 60px rgba(24,224,255,.06) inset;
   }
   #settingsPanel.show{display:block}
-  .setting-row{display:flex;align-items:center;gap:14px}
-  .setting-row label{font-size:13px;letter-spacing:2px;color:#8ad7ee;white-space:nowrap}
+  .setting-row{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+  .setting-row:last-child{margin-bottom:0}
+  .setting-row label{font-size:13px;letter-spacing:2px;color:#8ad7ee;white-space:nowrap;min-width:88px}
   input[type=range]{
     flex:1;-webkit-appearance:none;appearance:none;height:4px;border-radius:2px;
     background:linear-gradient(90deg,#18e0ff,#7ef6ff);outline:none;cursor:pointer;
@@ -139,7 +148,143 @@
     width:16px;height:16px;border:none;border-radius:50%;
     background:#eafcff;box-shadow:0 0 12px #18e0ff;cursor:pointer;
   }
-  #sensValue{font-size:13px;color:#7ef6ff;min-width:56px;text-align:right;font-weight:700}
+  .setting-val{font-size:13px;color:#7ef6ff;min-width:48px;text-align:right;font-weight:700}
+
+  /* ================= 移动端控制 ================= */
+  #mobileControls{
+    position:fixed;inset:0;display:none;pointer-events:none;z-index:5;
+    touch-action:none;
+  }
+  body.mobile #mobileControls{display:block}
+
+  /* 左侧摇杆触摸区 */
+  #joystickZone{
+    position:absolute;left:0;bottom:0;width:52%;height:62%;
+    pointer-events:auto;touch-action:none;
+  }
+  #joystickBase{
+    position:absolute;left:32px;bottom:76px;
+    width:132px;height:132px;border-radius:50%;
+    background:radial-gradient(circle at 50% 50%, rgba(12,40,60,.42), rgba(6,18,30,.26));
+    border:2px solid rgba(60,200,240,.38);
+    box-shadow:0 0 28px rgba(24,224,255,.18), 0 0 40px rgba(24,224,255,.12) inset;
+  }
+  #joystickKnob{
+    position:absolute;left:50%;top:50%;
+    width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:50%;
+    background:radial-gradient(circle at 34% 28%, #a8f7ff, #18c8f0);
+    box-shadow:0 0 22px rgba(24,224,255,.85);
+    will-change:transform;
+  }
+
+  /* 摇杆上方开火按钮 */
+  #fireAboveBtn{
+    position:absolute;left:52px;bottom:236px;
+    width:96px;height:96px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    font-size:16px;font-weight:800;letter-spacing:2px;color:#04141c;
+    background:radial-gradient(circle at 35% 30%, #8ef7ff, #18c8f0);
+    box-shadow:0 0 26px rgba(24,224,255,.7);
+    pointer-events:auto;touch-action:none;
+    user-select:none;-webkit-user-select:none;
+    transition:transform .08s;
+  }
+  #fireAboveBtn.active{
+    transform:scale(.92);
+    box-shadow:0 0 42px rgba(24,224,255,1);
+  }
+
+  /* 右侧视角 / 开火触摸区 */
+  #lookZone{
+    position:absolute;right:0;top:0;width:50%;height:100%;
+    pointer-events:auto;touch-action:none;
+  }
+
+  /* 右下按钮簇 */
+  #rightButtons{
+    position:absolute;right:22px;bottom:44px;
+    display:grid;grid-template-columns:repeat(2,60px);
+    grid-template-rows:repeat(2,60px);gap:12px;
+    pointer-events:none;z-index:3;
+  }
+  #rightButtons .mbtn{pointer-events:auto}
+
+  .mbtn{
+    display:flex;align-items:center;justify-content:center;
+    border-radius:50%;
+    font-size:14px;font-weight:800;letter-spacing:1px;color:#9fe8ff;
+    background:rgba(10,32,50,.55);
+    border:2px solid rgba(60,200,240,.42);
+    box-shadow:0 0 16px rgba(24,224,255,.25);
+    touch-action:none;user-select:none;-webkit-user-select:none;
+    transition:background .08s, box-shadow .08s;
+  }
+  .mbtn.active{
+    background:rgba(24,224,255,.38);
+    color:#04141c;
+    box-shadow:0 0 28px rgba(24,224,255,.9);
+  }
+
+  /* 暂停按钮 */
+  #pauseBtn{
+    position:absolute;left:14px;top:14px;
+    width:44px;height:44px;font-size:16px;border-radius:50%;
+    pointer-events:auto;z-index:3;
+  }
+
+  /* ---------- 移动端 HUD 重排 ---------- */
+  body.mobile .hp{
+    left:50%;transform:translateX(-50%);
+    bottom:auto;top:10px;width:150px;
+  }
+  body.mobile .hp .stat-label{text-align:center;font-size:9px;margin-bottom:5px;letter-spacing:2px}
+  body.mobile .hp .bar{height:9px}
+
+  body.mobile .ammo-panel{
+    left:50%;transform:translateX(-50%);
+    right:auto;bottom:auto;top:40px;text-align:center;
+  }
+  body.mobile .weapon-name{font-size:10px;margin-bottom:2px;letter-spacing:2px}
+  body.mobile .ammo{font-size:17px}
+
+  body.mobile .score{right:12px;top:10px}
+  body.mobile .score .stat-label{font-size:9px;margin-bottom:3px}
+  body.mobile .score .stat-value{font-size:20px}
+
+  body.mobile .wave{right:12px;top:52px}
+  body.mobile .wave .stat-label{font-size:9px;margin-bottom:3px}
+  body.mobile .wave .stat-value{font-size:20px}
+
+  body.mobile .banner{font-size:28px;letter-spacing:6px;top:26%}
+
+  body.mobile .combo{bottom:32%}
+  body.mobile .combo-text{font-size:30px;letter-spacing:5px}
+  body.mobile .combo-sub{font-size:12px;letter-spacing:3px}
+
+  body.mobile .keys{display:none}
+  body.mobile .touch-hint{display:block}
+
+  body.mobile #overlayTitle{font-size:38px;letter-spacing:8px}
+  body.mobile #overlaySub{font-size:13px;letter-spacing:2px}
+  body.mobile #startBtn{padding:14px 44px;font-size:15px;letter-spacing:4px}
+
+  /* 小屏 / 横屏适配 */
+  @media (max-height: 500px) {
+    #joystickBase{width:108px;height:108px;left:24px;bottom:52px}
+    #joystickKnob{width:48px;height:48px;margin:-24px 0 0 -24px}
+    #fireAboveBtn{width:76px;height:76px;left:40px;bottom:176px;font-size:13px}
+    #rightButtons{right:16px;bottom:22px;
+      grid-template-columns:repeat(2,52px);grid-template-rows:repeat(2,52px);gap:10px}
+    #rightButtons .mbtn{font-size:12px}
+    #pauseBtn{width:38px;height:38px;font-size:14px;left:10px;top:10px}
+    body.mobile .hp{width:120px;top:6px}
+    body.mobile .ammo-panel{top:30px}
+    body.mobile .ammo{font-size:15px}
+    body.mobile .score{top:6px}
+    body.mobile .wave{top:42px}
+    body.mobile .combo{bottom:38%}
+    body.mobile .combo-text{font-size:24px}
+  }
 </style>
 </head>
 <body>
@@ -172,7 +317,6 @@
     <div class="ammo" id="ammoVal">30 / 30</div>
   </div>
 
-  <!-- 连击特效 -->
   <div class="combo" id="combo">
     <div class="combo-text" id="comboText"></div>
     <div class="combo-sub" id="comboSub"></div>
@@ -180,6 +324,28 @@
 
   <div class="banner" id="banner"></div>
   <div id="damage"></div>
+</div>
+
+<!-- ================= 移动端触摸控制 ================= -->
+<div id="mobileControls">
+  <div id="joystickZone">
+    <div id="joystickBase">
+      <div id="joystickKnob"></div>
+    </div>
+  </div>
+
+  <div id="fireAboveBtn">开火</div>
+
+  <div id="lookZone"></div>
+
+  <div id="rightButtons">
+    <div class="mbtn" id="jumpBtn">跳跃</div>
+    <div class="mbtn" id="adsBtn">开镜</div>
+    <div class="mbtn" id="reloadBtn">换弹</div>
+    <div class="mbtn" id="switchBtn">切枪</div>
+  </div>
+
+  <div class="mbtn" id="pauseBtn">❚❚</div>
 </div>
 
 <div id="overlay" class="show">
@@ -190,11 +356,22 @@
     <div class="setting-row">
       <label for="sensRange">鼠标灵敏度</label>
       <input type="range" id="sensRange" min="0.2" max="3" step="0.05" value="1" />
-      <span id="sensValue">1.00×</span>
+      <span class="setting-val" id="sensValue">1.00×</span>
+    </div>
+    <div class="setting-row">
+      <label for="musicRange">音乐音量</label>
+      <input type="range" id="musicRange" min="0" max="1" step="0.05" value="0.35" />
+      <span class="setting-val" id="musicValue">35%</span>
+    </div>
+    <div class="setting-row">
+      <label for="sfxRange">音效音量</label>
+      <input type="range" id="sfxRange" min="0" max="1" step="0.05" value="0.75" />
+      <span class="setting-val" id="sfxValue">75%</span>
     </div>
   </div>
 
   <button id="startBtn">开始游戏</button>
+
   <div class="keys">
     <span><b>W A S D</b> 移动</span>
     <span><b>空格</b> 跳跃</span>
@@ -204,6 +381,10 @@
     <span><b>R</b> 换弹</span>
     <span><b>1-4 / 滚轮</b> 切换武器</span>
     <span><b>ESC</b> 暂停</span>
+  </div>
+
+  <div class="touch-hint">
+    左侧摇杆移动 · 右侧滑动瞄准并开火<br>摇杆上方开火键 · 右下角跳跃 / 开镜 / 换弹 / 切枪
   </div>
 </div>
 
@@ -219,6 +400,468 @@
 import * as THREE from 'three';
 
 /* =========================================================
+   移动端检测
+   ========================================================= */
+const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+const isMobile = isTouchDevice &&
+  (window.matchMedia('(pointer: coarse)').matches || window.innerWidth <= 900 ||
+   /Android|iPhone|iPad|iPod|Mobile|HarmonyOS/i.test(navigator.userAgent));
+
+if (isMobile) document.body.classList.add('mobile');
+
+/* =========================================================
+   音频系统（Web Audio API 合成，无外部资源）
+   ========================================================= */
+let audioCtx = null;
+let masterGain = null;
+let sfxGain = null;
+let musicGain = null;
+let noiseBuffer = null;
+
+const bgm = {
+  isPlaying: false,
+  currentStep: 0,
+  nextNoteTime: 0,
+  schedulerId: null,
+  bpm: 124,
+  get stepDur() { return 60 / this.bpm / 4; }
+};
+
+const CHORDS = [
+  { root: 110.00, notes: [220.00, 261.63, 329.63] },
+  { root: 87.31,  notes: [174.61, 220.00, 261.63] },
+  { root: 98.00,  notes: [196.00, 246.94, 293.66] },
+  { root: 82.41,  notes: [164.81, 196.00, 246.94] },
+];
+
+function initAudio() {
+  if (audioCtx) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return;
+  }
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.85;
+    masterGain.connect(audioCtx.destination);
+
+    sfxGain = audioCtx.createGain();
+    sfxGain.gain.value = 0.75;
+    sfxGain.connect(masterGain);
+
+    musicGain = audioCtx.createGain();
+    musicGain.gain.value = 0.35;
+    musicGain.connect(masterGain);
+
+    const len = audioCtx.sampleRate;
+    noiseBuffer = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+  } catch (e) {
+    console.warn('音频初始化失败', e);
+    audioCtx = null;
+  }
+}
+
+function createNoise() {
+  const src = audioCtx.createBufferSource();
+  src.buffer = noiseBuffer;
+  return src;
+}
+
+/* ------------------- 射击音效 ------------------- */
+function sfxShootRifle(t) {
+  const n = createNoise();
+  const f = audioCtx.createBiquadFilter();
+  f.type = 'bandpass';
+  f.frequency.setValueAtTime(2000, t);
+  f.frequency.exponentialRampToValueAtTime(500, t + 0.06);
+  f.Q.value = 1.2;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.55, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+  n.connect(f).connect(g).connect(sfxGain);
+  n.start(t); n.stop(t + 0.12);
+
+  const o = audioCtx.createOscillator();
+  o.type = 'square';
+  o.frequency.setValueAtTime(180, t);
+  o.frequency.exponentialRampToValueAtTime(60, t + 0.05);
+  const go = audioCtx.createGain();
+  go.gain.setValueAtTime(0.2, t);
+  go.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+  o.connect(go).connect(sfxGain);
+  o.start(t); o.stop(t + 0.08);
+}
+
+function sfxShootShotgun(t) {
+  const n = createNoise();
+  const f = audioCtx.createBiquadFilter();
+  f.type = 'lowpass';
+  f.frequency.setValueAtTime(3000, t);
+  f.frequency.exponentialRampToValueAtTime(300, t + 0.15);
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.85, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+  n.connect(f).connect(g).connect(sfxGain);
+  n.start(t); n.stop(t + 0.3);
+
+  const o = audioCtx.createOscillator();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(120, t);
+  o.frequency.exponentialRampToValueAtTime(35, t + 0.18);
+  const go = audioCtx.createGain();
+  go.gain.setValueAtTime(0.6, t);
+  go.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+  o.connect(go).connect(sfxGain);
+  o.start(t); o.stop(t + 0.32);
+}
+
+function sfxShootSniper(t) {
+  const n = createNoise();
+  const f = audioCtx.createBiquadFilter();
+  f.type = 'bandpass';
+  f.frequency.setValueAtTime(1500, t);
+  f.frequency.exponentialRampToValueAtTime(200, t + 0.4);
+  f.Q.value = 0.5;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.9, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+  n.connect(f).connect(g).connect(sfxGain);
+  n.start(t); n.stop(t + 0.65);
+
+  const o = audioCtx.createOscillator();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(90, t);
+  o.frequency.exponentialRampToValueAtTime(30, t + 0.5);
+  const go = audioCtx.createGain();
+  go.gain.setValueAtTime(0.75, t);
+  go.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+  o.connect(go).connect(sfxGain);
+  o.start(t); o.stop(t + 0.72);
+}
+
+function sfxShootLMG(t) {
+  const n = createNoise();
+  const f = audioCtx.createBiquadFilter();
+  f.type = 'bandpass';
+  f.frequency.setValueAtTime(2500, t);
+  f.frequency.exponentialRampToValueAtTime(800, t + 0.04);
+  f.Q.value = 1.5;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.4, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+  n.connect(f).connect(g).connect(sfxGain);
+  n.start(t); n.stop(t + 0.08);
+
+  const o = audioCtx.createOscillator();
+  o.type = 'square';
+  o.frequency.setValueAtTime(220, t);
+  o.frequency.exponentialRampToValueAtTime(80, t + 0.04);
+  const go = audioCtx.createGain();
+  go.gain.setValueAtTime(0.15, t);
+  go.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+  o.connect(go).connect(sfxGain);
+  o.start(t); o.stop(t + 0.06);
+}
+
+function sfxShoot(weaponId) {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  if (weaponId === 'rifle') sfxShootRifle(t);
+  else if (weaponId === 'shotgun') sfxShootShotgun(t);
+  else if (weaponId === 'sniper') sfxShootSniper(t);
+  else if (weaponId === 'lmg') sfxShootLMG(t);
+}
+
+/* ------------------- 换弹 / 空弹夹 ------------------- */
+function playClick(t, freq, vol) {
+  const n = createNoise();
+  const f = audioCtx.createBiquadFilter();
+  f.type = 'bandpass';
+  f.frequency.value = freq;
+  f.Q.value = 8;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+  n.connect(f).connect(g).connect(sfxGain);
+  n.start(t); n.stop(t + 0.05);
+}
+
+function sfxReload() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  playClick(t, 1200, 0.15);
+  playClick(t + 0.25, 800, 0.12);
+  playClick(t + 0.5, 1600, 0.1);
+}
+
+function sfxEmpty() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  o.type = 'square';
+  o.frequency.value = 80;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.08, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+  o.connect(g).connect(sfxGain);
+  o.start(t); o.stop(t + 0.05);
+}
+
+/* ------------------- 命中 / 击杀 ------------------- */
+function sfxEnemyHit() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  o.type = 'square';
+  o.frequency.setValueAtTime(900, t);
+  o.frequency.exponentialRampToValueAtTime(500, t + 0.05);
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.12, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+  o.connect(g).connect(sfxGain);
+  o.start(t); o.stop(t + 0.07);
+}
+
+function sfxEnemyDeath() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(400, t);
+  o.frequency.exponentialRampToValueAtTime(80, t + 0.3);
+  const f = audioCtx.createBiquadFilter();
+  f.type = 'lowpass';
+  f.frequency.setValueAtTime(2000, t);
+  f.frequency.exponentialRampToValueAtTime(300, t + 0.3);
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.2, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+  o.connect(f).connect(g).connect(sfxGain);
+  o.start(t); o.stop(t + 0.36);
+}
+
+function sfxHeadshot() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(2000, t);
+  o.frequency.exponentialRampToValueAtTime(3500, t + 0.05);
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.3, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+  o.connect(g).connect(sfxGain);
+  o.start(t); o.stop(t + 0.26);
+
+  const o2 = audioCtx.createOscillator();
+  o2.type = 'triangle';
+  o2.frequency.value = 5000;
+  const g2 = audioCtx.createGain();
+  g2.gain.setValueAtTime(0.15, t);
+  g2.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+  o2.connect(g2).connect(sfxGain);
+  o2.start(t); o2.stop(t + 0.21);
+
+  const n = createNoise();
+  const f = audioCtx.createBiquadFilter();
+  f.type = 'highpass';
+  f.frequency.value = 3000;
+  const g3 = audioCtx.createGain();
+  g3.gain.setValueAtTime(0.2, t);
+  g3.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+  n.connect(f).connect(g3).connect(sfxGain);
+  n.start(t); n.stop(t + 0.06);
+}
+
+/* ------------------- 玩家受伤 ------------------- */
+function sfxPlayerHurt() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(200, t);
+  o.frequency.exponentialRampToValueAtTime(60, t + 0.25);
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.35, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+  o.connect(g).connect(sfxGain);
+  o.start(t); o.stop(t + 0.36);
+}
+
+/* ------------------- 波次 / 切换 / 连击 ------------------- */
+function sfxWaveStart() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  [440, 554.37, 659.25].forEach((freq, i) => {
+    const o = audioCtx.createOscillator();
+    o.type = 'triangle';
+    o.frequency.value = freq;
+    const g = audioCtx.createGain();
+    const start = t + i * 0.1;
+    g.gain.setValueAtTime(0.001, start);
+    g.gain.linearRampToValueAtTime(0.15, start + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, start + 0.35);
+    o.connect(g).connect(sfxGain);
+    o.start(start); o.stop(start + 0.4);
+  });
+}
+
+function sfxWeaponSwitch() {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const o = audioCtx.createOscillator();
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(600, t);
+  o.frequency.exponentialRampToValueAtTime(1200, t + 0.08);
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.15, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
+  o.connect(g).connect(sfxGain);
+  o.start(t); o.stop(t + 0.11);
+}
+
+function sfxCombo(count) {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const baseFreq = 600 + Math.min(count, 10) * 100;
+  const o = audioCtx.createOscillator();
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(baseFreq, t);
+  o.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, t + 0.1);
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.15, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+  o.connect(g).connect(sfxGain);
+  o.start(t); o.stop(t + 0.16);
+}
+
+/* ------------------- BGM 乐器 ------------------- */
+function playKick(time) {
+  const o = audioCtx.createOscillator();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(150, time);
+  o.frequency.exponentialRampToValueAtTime(45, time + 0.12);
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.9, time);
+  g.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+  o.connect(g).connect(musicGain);
+  o.start(time); o.stop(time + 0.32);
+}
+
+function playSnare(time) {
+  const n = createNoise();
+  const f = audioCtx.createBiquadFilter();
+  f.type = 'highpass';
+  f.frequency.value = 1200;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.32, time);
+  g.gain.exponentialRampToValueAtTime(0.001, time + 0.18);
+  n.connect(f).connect(g).connect(musicGain);
+  n.start(time); n.stop(time + 0.2);
+}
+
+function playHihat(time, vol) {
+  const n = createNoise();
+  const f = audioCtx.createBiquadFilter();
+  f.type = 'highpass';
+  f.frequency.value = 7000;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(vol, time);
+  g.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+  n.connect(f).connect(g).connect(musicGain);
+  n.start(time); n.stop(time + 0.06);
+}
+
+function playBass(freq, time, dur) {
+  const o = audioCtx.createOscillator();
+  o.type = 'sawtooth';
+  o.frequency.value = freq;
+  const f = audioCtx.createBiquadFilter();
+  f.type = 'lowpass';
+  f.frequency.setValueAtTime(800, time);
+  f.frequency.exponentialRampToValueAtTime(200, time + dur);
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.001, time);
+  g.gain.linearRampToValueAtTime(0.3, time + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.001, time + dur);
+  o.connect(f).connect(g).connect(musicGain);
+  o.start(time); o.stop(time + dur + 0.02);
+}
+
+function playPad(freqs, time, dur) {
+  freqs.forEach((fq, i) => {
+    const o = audioCtx.createOscillator();
+    o.type = 'triangle';
+    o.frequency.value = fq;
+    o.detune.value = (i - 1) * 5;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.001, time);
+    g.gain.linearRampToValueAtTime(0.055, time + 0.3);
+    g.gain.setValueAtTime(0.055, time + dur - 0.3);
+    g.gain.exponentialRampToValueAtTime(0.001, time + dur);
+    o.connect(g).connect(musicGain);
+    o.start(time); o.stop(time + dur + 0.05);
+  });
+}
+
+function scheduleStep(step, time) {
+  const stepInBar = step % 16;
+  const barIdx = Math.floor(step / 16) % 4;
+  const chord = CHORDS[barIdx];
+
+  if (stepInBar === 0) {
+    playPad(chord.notes, time, bgm.stepDur * 16);
+  }
+
+  if (stepInBar === 0 || stepInBar === 4 || stepInBar === 8 || stepInBar === 12) {
+    playBass(chord.root, time, bgm.stepDur * 3.5);
+  }
+  if (stepInBar === 14) {
+    playBass(chord.root * 2, time, bgm.stepDur * 1.5);
+  }
+
+  if (stepInBar === 0 || stepInBar === 4 || stepInBar === 8 || stepInBar === 12) {
+    playKick(time);
+  }
+  if (stepInBar === 4 || stepInBar === 12) {
+    playSnare(time);
+  }
+  if (stepInBar === 2 || stepInBar === 6 || stepInBar === 10 || stepInBar === 14) {
+    playHihat(time, 0.15);
+  }
+}
+
+function scheduleBGM() {
+  if (!audioCtx || !bgm.isPlaying) return;
+  while (bgm.nextNoteTime < audioCtx.currentTime + 0.12) {
+    scheduleStep(bgm.currentStep, bgm.nextNoteTime);
+    bgm.nextNoteTime += bgm.stepDur;
+    bgm.currentStep = (bgm.currentStep + 1) % 64;
+  }
+}
+
+function startBGM() {
+  if (!audioCtx || bgm.isPlaying) return;
+  bgm.isPlaying = true;
+  bgm.currentStep = 0;
+  bgm.nextNoteTime = audioCtx.currentTime + 0.1;
+  bgm.schedulerId = setInterval(scheduleBGM, 25);
+  scheduleBGM();
+}
+
+function stopBGM() {
+  if (!audioCtx) return;
+  bgm.isPlaying = false;
+  if (bgm.schedulerId) {
+    clearInterval(bgm.schedulerId);
+    bgm.schedulerId = null;
+  }
+}
+
+/* =========================================================
    基础：渲染器 / 场景 / 相机
    ========================================================= */
 const container = document.getElementById('game');
@@ -226,7 +869,7 @@ const container = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = !isMobile;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 container.appendChild(renderer.domElement);
 const canvas = renderer.domElement;
@@ -247,15 +890,16 @@ scene.add(new THREE.HemisphereLight(0x8fb6ff, 0x141c2a, 0.85));
 
 const sun = new THREE.DirectionalLight(0xdfefff, 1.35);
 sun.position.set(28, 48, 22);
-sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.bias = -0.0006;
-const sc = sun.shadow.camera;
-sc.left = -62; sc.right = 62; sc.top = 62; sc.bottom = -62; sc.near = 1; sc.far = 160;
-sc.updateProjectionMatrix();
+sun.castShadow = !isMobile;
+if (!isMobile) {
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.bias = -0.0006;
+  const sc = sun.shadow.camera;
+  sc.left = -62; sc.right = 62; sc.top = 62; sc.bottom = -62; sc.near = 1; sc.far = 160;
+  sc.updateProjectionMatrix();
+}
 scene.add(sun);
 
-// 氛围点光源
 const glowA = new THREE.PointLight(0x18e0ff, 2.2, 90);
 glowA.position.set(-30, 12, -30);
 scene.add(glowA);
@@ -282,7 +926,6 @@ grid.material.transparent = true;
 grid.material.opacity = 0.75;
 scene.add(grid);
 
-// 边界光环
 const ring = new THREE.Mesh(
   new THREE.RingGeometry(ARENA_RADIUS - 0.6, ARENA_RADIUS, 96),
   new THREE.MeshBasicMaterial({
@@ -328,7 +971,6 @@ for (let gx = -4; gx <= 4; gx++) {
     scene.add(m);
     obstacles.push(m);
 
-    // 顶部发光条
     const cap = new THREE.Mesh(
       new THREE.BoxGeometry(m.userData.w * 1.02, 0.12, m.userData.d * 1.02),
       new THREE.MeshBasicMaterial({
@@ -359,18 +1001,25 @@ const player = {
 };
 
 const keys = {};
-let state = 'menu';         // menu | playing | paused | dead
+let state = 'menu';
 let mouseDown = false;
 let time = 0;
 let viewRecoil = 0;
 let damageAlpha = 0;
 let bannerTimer = 0;
 
+/* 移动端输入状态 */
+let mobileMoveX = 0;
+let mobileMoveY = 0;
+let mobileFiring = false;
+let mobileFireCount = 0;
+
 /* =========================================================
-   鼠标灵敏度（可在暂停设置中调节）
+   鼠标 / 触摸灵敏度
    ========================================================= */
 const BASE_SENS = 0.0022;
 let sensitivityMul = 1.0;
+const TOUCH_SENS_MUL = 1.35;
 
 /* =========================================================
    连击系统
@@ -553,7 +1202,6 @@ function createGunModel(def) {
     barrel.position.set(0, 0.03, -0.92);
     group.add(barrel);
 
-    // 瞄准镜
     const scope = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.34, 14), darkMat);
     scope.rotation.x = Math.PI / 2;
     scope.position.set(0, 0.17, -0.22);
@@ -570,7 +1218,6 @@ function createGunModel(def) {
     mount2.position.z = -0.3;
     group.add(mount2);
 
-    // 枪托
     const stock = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.32), bodyMat);
     stock.position.set(0, -0.03, 0.28);
     group.add(stock);
@@ -596,12 +1243,10 @@ function createGunModel(def) {
     barrel.position.set(0, 0.04, -0.78);
     group.add(barrel);
 
-    // 弹箱
     const box = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.24, 0.3), darkMat);
     box.position.set(0, -0.17, -0.02);
     group.add(box);
 
-    // 弹链
     const belt = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.07, 0.2), neonMat);
     belt.position.set(0.13, -0.1, -0.06);
     group.add(belt);
@@ -611,7 +1256,6 @@ function createGunModel(def) {
     grip.rotation.x = -0.22;
     group.add(grip);
 
-    // 散热环
     const ring1 = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.012, 6, 12), neonMat);
     ring1.position.set(0, 0.04, -0.5);
     group.add(ring1);
@@ -622,7 +1266,6 @@ function createGunModel(def) {
     muzzlePos.set(0, 0.04, -1.14);
   }
 
-  // 枪口火光
   const flash = new THREE.Mesh(
     new THREE.SphereGeometry(0.13, 10, 10),
     new THREE.MeshBasicMaterial({
@@ -891,6 +1534,7 @@ function damageEnemy(enemy, dmg, point, color, part) {
   enemy.hitFlash = 0.12;
   enemy.lastHitPart = part || PART_BODY;
   if (point) spawnBurst(point, color || 0xff88aa, 7, 5);
+  sfxEnemyHit();
   if (enemy.hp <= 0) killEnemy(enemy);
 }
 
@@ -907,7 +1551,11 @@ function killEnemy(enemy) {
   enemy.mat.dispose();
   score += 100;
 
-  triggerCombo(enemy.lastHitPart === PART_HEAD);
+  const isHeadshot = enemy.lastHitPart === PART_HEAD;
+  sfxEnemyDeath();
+  if (isHeadshot) sfxHeadshot();
+  triggerCombo(isHeadshot);
+  sfxCombo(comboCount);
 }
 
 /* =========================================================
@@ -1104,23 +1752,39 @@ function hurtPlayer(dmg) {
   if (state !== 'playing') return;
   player.hp -= dmg;
   damageAlpha = 0.62;
+  sfxPlayerHurt();
   if (player.hp <= 0) {
     player.hp = 0;
     gameOver();
   }
 }
 
+function resetMobileFire() {
+  mobileFiring = false;
+  mobileFireCount = 0;
+}
+
+function resetJoystick() {
+  mobileMoveX = 0;
+  mobileMoveY = 0;
+  if (joyTouchId !== null) joyTouchId = null;
+  if (joystickKnob) joystickKnob.style.transform = 'translate(0px,0px)';
+}
+
 function gameOver() {
   state = 'dead';
   mouseDown = false;
+  resetMobileFire();
+  resetJoystick();
   resetCombo();
-  if (document.pointerLockElement) document.exitPointerLock();
+  stopBGM();
+  if (!isMobile && document.pointerLockElement) document.exitPointerLock();
   hud.classList.remove('show');
   showOverlay('游戏结束', `你坚持到了第 ${wave} 波 · 最终得分 ${score}`, '重新开始', false);
 }
 
 /* =========================================================
-   射击（修复：子弹方向使用开火前瞄准方向，不含本发后坐力）
+   射击
    ========================================================= */
 const raycaster = new THREE.Raycaster();
 
@@ -1146,15 +1810,16 @@ function fire() {
 
   if (w.reloading) return;
   if (time - lastShot < d.fireRate) return;
-  if (w.ammo <= 0) { startReload(); return; }
+  if (w.ammo <= 0) {
+    sfxEmpty();
+    startReload();
+    return;
+  }
 
   const gap = time - lastShot;
   fireChain = gap < 0.28 ? Math.min(fireChain + 1, 30) : 0;
 
-  /* =====================================================
-     关键修复 1：先确定子弹方向 —— 使用开火前的瞄准方向
-     即 player.pitch + 当前 viewRecoil，不含本发的 pitchKick 和 viewRecoil 增量
-     ===================================================== */
+  /* 先确定子弹方向（使用开火前的瞄准状态，不含本发后坐力） */
   _fireEuler.set(player.pitch + viewRecoil, player.yaw, 0, 'YXZ');
   _fireQuat.setFromEuler(_fireEuler);
 
@@ -1162,16 +1827,12 @@ function fire() {
   const up = new THREE.Vector3(0, 1, 0).applyQuaternion(_fireQuat);
   const baseDir = new THREE.Vector3(0, 0, -1).applyQuaternion(_fireQuat);
 
-  /* 关键修复 2：射线起点使用稳定的玩家眼睛位置，不受 bob 影响 */
   const originPos = new THREE.Vector3(
     player.pos.x,
     player.pos.y + player.height,
     player.pos.z
   );
 
-  /* =====================================================
-     计算扩散（开镜时狙击枪 spreadMax = 0，完全精准）
-     ===================================================== */
   const spreadBase   = aiming ? d.adsSpreadBase   : d.hipSpreadBase;
   const spreadChain  = aiming ? d.adsSpreadPerChain : d.hipSpreadPerChain;
   const spreadMax    = aiming ? d.adsSpreadMax    : d.hipSpreadMax;
@@ -1241,10 +1902,8 @@ function fire() {
     }
   }
 
-  /* =====================================================
-     最后再应用后坐力 —— 只影响随后的视角视觉，
-     不会影响刚才发出的子弹方向
-     ===================================================== */
+  sfxShoot(d.id);
+
   const pitchKick = d.pitchKick + Math.min(fireChain, 25) * d.pitchKickPerChain;
   player.pitch += pitchKick;
   const lim = Math.PI / 2 - 0.08;
@@ -1265,6 +1924,17 @@ function startReload() {
   if (w.reloading || w.ammo >= w.def.magSize) return;
   w.reloading = true;
   w.reloadTimer = w.def.reloadTime;
+  sfxReload();
+}
+
+function toggleAim() {
+  if (state !== 'playing') return;
+  aiming = !aiming;
+  if (aiming) {
+    recoilSpread = 0;
+    fireChain = 0;
+    viewRecoil = 0;
+  }
 }
 
 /* =========================================================
@@ -1308,6 +1978,7 @@ function switchWeapon(idx) {
   muzzleTimer = 0;
   lastShot = -10;
 
+  sfxWeaponSwitch();
   updateAmmoHUD();
 }
 
@@ -1326,6 +1997,7 @@ function startWave() {
   toSpawn = 3 + Math.floor(wave * 1.8);
   spawnTimer = 0.3;
   showBanner(`第 ${wave} 波`);
+  sfxWaveStart();
 }
 
 function updateWaves(dt) {
@@ -1352,7 +2024,7 @@ function updateWaves(dt) {
 }
 
 /* =========================================================
-   玩家更新（开镜时 bob 完全消除）
+   玩家更新（合并键盘与摇杆输入）
    ========================================================= */
 const _fwd = new THREE.Vector3();
 const _rgt = new THREE.Vector3();
@@ -1362,7 +2034,10 @@ function updatePlayer(dt) {
   _fwd.set(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
   _rgt.set(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
 
-  let ix = 0, iz = 0;
+  /* 输入：摇杆 + 键盘 */
+  let ix = mobileMoveX;
+  let iz = mobileMoveY;
+
   if (keys['KeyW'] || keys['ArrowUp'])    iz += 1;
   if (keys['KeyS'] || keys['ArrowDown'])  iz -= 1;
   if (keys['KeyD'] || keys['ArrowRight']) ix += 1;
@@ -1413,7 +2088,6 @@ function updatePlayer(dt) {
     camera.updateProjectionMatrix();
   }
 
-  /* 关键修复 3：开镜时 bob 完全消除（bobScale = 1 - adsT），画面稳定 */
   const speedSq = player.vel.x * player.vel.x + player.vel.z * player.vel.z;
   const moving = player.onGround && speedSq > 2;
   player.bob += dt * (moving ? 12 : 2);
@@ -1551,10 +2225,14 @@ function hideOverlay() {
 }
 
 /* =========================================================
-   鼠标灵敏度设置
+   设置项
    ========================================================= */
 const sensRange = document.getElementById('sensRange');
 const sensValue = document.getElementById('sensValue');
+const musicRange = document.getElementById('musicRange');
+const musicValue = document.getElementById('musicValue');
+const sfxRange = document.getElementById('sfxRange');
+const sfxValue = document.getElementById('sfxValue');
 
 function applySensitivity(val) {
   sensitivityMul = Math.max(0.2, Math.min(3, val));
@@ -1562,10 +2240,255 @@ function applySensitivity(val) {
   sensRange.value = sensitivityMul;
 }
 
-sensRange.addEventListener('input', () => {
-  applySensitivity(parseFloat(sensRange.value));
-});
+function applyMusicVolume(val) {
+  const v = Math.max(0, Math.min(1, val));
+  musicValue.textContent = Math.round(v * 100) + '%';
+  musicRange.value = v;
+  if (musicGain) musicGain.gain.value = v;
+}
+
+function applySfxVolume(val) {
+  const v = Math.max(0, Math.min(1, val));
+  sfxValue.textContent = Math.round(v * 100) + '%';
+  sfxRange.value = v;
+  if (sfxGain) sfxGain.gain.value = v;
+}
+
+sensRange.addEventListener('input', () => applySensitivity(parseFloat(sensRange.value)));
+musicRange.addEventListener('input', () => applyMusicVolume(parseFloat(musicRange.value)));
+sfxRange.addEventListener('input', () => applySfxVolume(parseFloat(sfxRange.value)));
+
 applySensitivity(parseFloat(sensRange.value));
+
+/* =========================================================
+   移动端触摸控制
+   ========================================================= */
+const joystickZone = document.getElementById('joystickZone');
+const joystickBase = document.getElementById('joystickBase');
+const joystickKnob = document.getElementById('joystickKnob');
+const fireAboveBtn = document.getElementById('fireAboveBtn');
+const lookZone = document.getElementById('lookZone');
+const jumpBtn = document.getElementById('jumpBtn');
+const adsBtn = document.getElementById('adsBtn');
+const reloadBtn = document.getElementById('reloadBtn');
+const switchBtn = document.getElementById('switchBtn');
+const pauseBtn = document.getElementById('pauseBtn');
+
+let joyTouchId = null;
+let joyCenter = { x: 0, y: 0 };
+let joyRadius = 48;
+
+let lookTouchId = null;
+let lookLastX = 0;
+let lookLastY = 0;
+
+function updateJoyCenter() {
+  const rect = joystickBase.getBoundingClientRect();
+  joyCenter.x = rect.left + rect.width / 2;
+  joyCenter.y = rect.top + rect.height / 2;
+  joyRadius = rect.width * 0.36;
+}
+
+function handleJoyMove(cx, cy) {
+  let dx = cx - joyCenter.x;
+  let dy = cy - joyCenter.y;
+  const len = Math.hypot(dx, dy);
+  const max = joyRadius;
+  if (len > max) {
+    dx = (dx / len) * max;
+    dy = (dy / len) * max;
+  }
+  joystickKnob.style.transform = `translate(${dx}px,${dy}px)`;
+
+  let nx = dx / max;
+  let nz = -dy / max;
+
+  if (Math.hypot(nx, nz) < 0.15) {
+    nx = 0;
+    nz = 0;
+  }
+
+  mobileMoveX = nx;
+  mobileMoveY = nz;
+}
+
+function startMobileFire() {
+  if (state !== 'playing') return;
+  mobileFireCount++;
+  mobileFiring = true;
+  const w = weapons[currentWeaponIndex];
+  if (!w.def.auto && mobileFireCount === 1) fire();
+}
+
+function stopMobileFire() {
+  mobileFireCount = Math.max(0, mobileFireCount - 1);
+  if (mobileFireCount === 0) mobileFiring = false;
+}
+
+function bindTapButton(el, onDown, onUp) {
+  el.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    el.classList.add('active');
+    if (onDown) onDown();
+  }, { passive: false });
+
+  const end = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    el.classList.remove('active');
+    if (onUp) onUp();
+  };
+  el.addEventListener('touchend', end, { passive: false });
+  el.addEventListener('touchcancel', end, { passive: false });
+}
+
+function initMobileControls() {
+  if (!isMobile) return;
+
+  /* ----- 左侧摇杆 ----- */
+  joystickZone.addEventListener('touchstart', (e) => {
+    if (state !== 'playing') return;
+    for (const t of e.changedTouches) {
+      if (joyTouchId === null) {
+        joyTouchId = t.identifier;
+        updateJoyCenter();
+        handleJoyMove(t.clientX, t.clientY);
+        e.preventDefault();
+        return;
+      }
+    }
+  }, { passive: false });
+
+  joystickZone.addEventListener('touchmove', (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === joyTouchId) {
+        handleJoyMove(t.clientX, t.clientY);
+        e.preventDefault();
+        break;
+      }
+    }
+  }, { passive: false });
+
+  const endJoy = (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === joyTouchId) {
+        joyTouchId = null;
+        mobileMoveX = 0;
+        mobileMoveY = 0;
+        joystickKnob.style.transform = 'translate(0px,0px)';
+        break;
+      }
+    }
+  };
+  joystickZone.addEventListener('touchend', endJoy);
+  joystickZone.addEventListener('touchcancel', endJoy);
+
+  /* ----- 摇杆上方开火键 ----- */
+  bindTapButton(fireAboveBtn, startMobileFire, stopMobileFire);
+
+  /* ----- 右侧视角 + 开火 ----- */
+  lookZone.addEventListener('touchstart', (e) => {
+    if (state !== 'playing') return;
+    for (const t of e.changedTouches) {
+      if (lookTouchId === null) {
+        lookTouchId = t.identifier;
+        lookLastX = t.clientX;
+        lookLastY = t.clientY;
+        startMobileFire();
+        e.preventDefault();
+        return;
+      }
+    }
+  }, { passive: false });
+
+  lookZone.addEventListener('touchmove', (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === lookTouchId) {
+        const dx = t.clientX - lookLastX;
+        const dy = t.clientY - lookLastY;
+        lookLastX = t.clientX;
+        lookLastY = t.clientY;
+
+        const d = weapons[currentWeaponIndex].def;
+        const sens = BASE_SENS * sensitivityMul * (aiming ? d.adsSens : 1) * TOUCH_SENS_MUL;
+        player.yaw -= dx * sens;
+        player.pitch -= dy * sens;
+        const lim = Math.PI / 2 - 0.06;
+        player.pitch = Math.max(-lim, Math.min(lim, player.pitch));
+        e.preventDefault();
+        break;
+      }
+    }
+  }, { passive: false });
+
+  const endLook = (e) => {
+    for (const t of e.changedTouches) {
+      if (t.identifier === lookTouchId) {
+        lookTouchId = null;
+        stopMobileFire();
+        break;
+      }
+    }
+  };
+  lookZone.addEventListener('touchend', endLook);
+  lookZone.addEventListener('touchcancel', endLook);
+
+  /* ----- 跳跃 ----- */
+  bindTapButton(jumpBtn,
+    () => { keys['Space'] = true; },
+    () => { keys['Space'] = false; }
+  );
+
+  /* ----- 开镜 ----- */
+  bindTapButton(adsBtn, () => { toggleAim(); }, null);
+
+  /* ----- 换弹 ----- */
+  bindTapButton(reloadBtn, () => { startReload(); }, null);
+
+  /* ----- 切枪 ----- */
+  bindTapButton(switchBtn, () => {
+    switchWeapon(currentWeaponIndex + 1);
+  }, null);
+
+  /* ----- 暂停 ----- */
+  pauseBtn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (state === 'playing') pauseGame();
+  }, { passive: false });
+
+  /* 横竖屏切换后重置摇杆中心 */
+  window.addEventListener('orientationchange', () => {
+    resetJoystick();
+    lookTouchId = null;
+    resetMobileFire();
+  });
+}
+
+/* =========================================================
+   暂停 / 恢复
+   ========================================================= */
+function pauseGame() {
+  if (state !== 'playing') return;
+  state = 'paused';
+  mouseDown = false;
+  resetMobileFire();
+  resetJoystick();
+  lookTouchId = null;
+  hud.classList.remove('show');
+  stopBGM();
+  showOverlay('已暂停', '可在此调节灵敏度与音量，点击继续返回战场', '继续游戏', true);
+}
+
+function resumeGame() {
+  state = 'playing';
+  hideOverlay();
+  hud.classList.add('show');
+  initAudio();
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  startBGM();
+}
 
 /* =========================================================
    输入
@@ -1592,12 +2515,13 @@ window.addEventListener('blur', () => {
 });
 
 window.addEventListener('wheel', (e) => {
-  if (state !== 'playing') return;
+  if (state !== 'playing' || isMobile) return;
   if (e.deltaY > 0) switchWeapon(currentWeaponIndex + 1);
   else if (e.deltaY < 0) switchWeapon(currentWeaponIndex - 1);
 }, { passive: true });
 
 document.addEventListener('mousedown', (e) => {
+  if (isMobile) return;
   if (state !== 'playing' || document.pointerLockElement !== canvas) return;
 
   if (e.button === 0) {
@@ -1605,12 +2529,7 @@ document.addEventListener('mousedown', (e) => {
     if (!weapons[currentWeaponIndex].def.auto) fire();
   }
   if (e.button === 2) {
-    aiming = !aiming;
-    if (aiming) {
-      recoilSpread = 0;
-      fireChain = 0;
-      viewRecoil = 0;
-    }
+    toggleAim();
   }
 });
 
@@ -1621,6 +2540,7 @@ document.addEventListener('mouseup', (e) => {
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 
 document.addEventListener('mousemove', (e) => {
+  if (isMobile) return;
   if (document.pointerLockElement !== canvas) return;
   const d = weapons[currentWeaponIndex].def;
   const sens = BASE_SENS * sensitivityMul * (aiming ? d.adsSens : 1);
@@ -1630,26 +2550,35 @@ document.addEventListener('mousemove', (e) => {
   player.pitch = Math.max(-lim, Math.min(lim, player.pitch));
 });
 
-/* ---------- 指针锁定 / 状态切换 ---------- */
+/* ---------- 指针锁定（仅桌面端） ---------- */
 startBtn.addEventListener('click', () => {
-  canvas.requestPointerLock();
+  initAudio();
+  applyMusicVolume(parseFloat(musicRange.value));
+  applySfxVolume(parseFloat(sfxRange.value));
+
+  if (isMobile) {
+    if (state === 'menu' || state === 'dead') {
+      startGame();
+    } else if (state === 'paused') {
+      resumeGame();
+    }
+  } else {
+    canvas.requestPointerLock();
+  }
 });
 
 document.addEventListener('pointerlockchange', () => {
+  if (isMobile) return;
+
   if (document.pointerLockElement === canvas) {
     if (state === 'menu' || state === 'dead') {
       startGame();
     } else if (state === 'paused') {
-      state = 'playing';
-      hideOverlay();
-      hud.classList.add('show');
+      resumeGame();
     }
   } else {
     if (state === 'playing') {
-      state = 'paused';
-      mouseDown = false;
-      hud.classList.remove('show');
-      showOverlay('已暂停', '可在此调节鼠标灵敏度，点击继续返回战场', '继续游戏', true);
+      pauseGame();
     }
   }
 });
@@ -1692,6 +2621,10 @@ function startGame() {
   bannerTimer = 0;
   mouseDown = false;
 
+  resetMobileFire();
+  resetJoystick();
+  lookTouchId = null;
+
   resetCombo();
 
   aiming = false;
@@ -1730,6 +2663,10 @@ function startGame() {
   hideOverlay();
   hud.classList.add('show');
 
+  initAudio();
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  startBGM();
+
   startWave();
   updateHUD(0);
 }
@@ -1761,7 +2698,7 @@ function loop(now) {
       }
     }
 
-    if (mouseDown && w.def.auto) fire();
+    if ((mouseDown || mobileFiring) && w.def.auto) fire();
   } else {
     const w = weapons[currentWeaponIndex];
     w.model.group.position.copy(gunBaseHip);
@@ -1787,6 +2724,15 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+/* =========================================================
+   启动
+   ========================================================= */
+initMobileControls();
+
+if (isMobile) {
+  overlaySub.innerHTML = '在霓虹竞技场中生存下去，击退一波又一波的敌人。<br>使用左侧摇杆移动，右侧滑动瞄准并开火。';
+}
 
 requestAnimationFrame(loop);
 </script>
